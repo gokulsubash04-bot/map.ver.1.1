@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import "./BuildingModel3D.css";
 
 /* ================= Floor / room data ================= */
 const FLOOR_ORDER = ["ground", "first", "second"];
@@ -332,6 +333,13 @@ export default function BuildingModel3D() {
     let radius = 16, theta = Math.PI / 4, phi = Math.PI / 3.2;
     let dragging = false, lastX = 0, lastY = 0, autoRotate = true, idleTimer = null;
 
+    // Track active pointers for multi-touch (pinch-to-zoom)
+    const activePointers = new Map();
+    let initialPinchDist = 0;
+    let initialRadius = 0;
+    let startX = 0;
+    let startY = 0;
+
     function updateCamera() {
       camera.position.x = target.x + radius * Math.sin(phi) * Math.sin(theta);
       camera.position.z = target.z + radius * Math.sin(phi) * Math.cos(theta);
@@ -340,26 +348,76 @@ export default function BuildingModel3D() {
     }
     updateCamera();
 
-    function onPointerDown(e) { dragging = true; autoRotate = false; lastX = e.clientX; lastY = e.clientY; clearTimeout(idleTimer); }
-    function onPointerMove(e) {
-      if (!dragging) return;
-      const dx = e.clientX - lastX, dy = e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      theta -= dx * 0.006;
-      phi = Math.max(0.35, Math.min(Math.PI / 2 - 0.02, phi - dy * 0.006));
-      updateCamera();
-    }
-    function onPointerUp() {
-      dragging = false;
+    function onPointerDown(e) {
+      activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+      autoRotate = false;
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { autoRotate = true; }, 3500);
+
+      if (activePointers.size === 1) {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        startX = e.clientX;
+        startY = e.clientY;
+      } else if (activePointers.size === 2) {
+        dragging = false;
+        const pts = Array.from(activePointers.values());
+        initialPinchDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+        initialRadius = radius;
+      }
     }
+
+    function onPointerMove(e) {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+      if (activePointers.size === 1 && dragging) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY;
+        theta -= dx * 0.006;
+        phi = Math.max(0.35, Math.min(Math.PI / 2 - 0.02, phi - dy * 0.006));
+        updateCamera();
+      } else if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        const dist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+        if (initialPinchDist > 0 && dist > 0) {
+          const factor = initialPinchDist / dist;
+          radius = Math.max(6, Math.min(30, initialRadius * factor));
+          updateCamera();
+        }
+      }
+    }
+
+    function onPointerUp(e) {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) {
+        initialPinchDist = 0;
+      }
+
+      if (activePointers.size === 0) {
+        dragging = false;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { autoRotate = true; }, 3500);
+      } else if (activePointers.size === 1) {
+        // Resume dragging with the remaining pointer
+        const remaining = activePointers.values().next().value;
+        lastX = remaining.clientX;
+        lastY = remaining.clientY;
+        dragging = true;
+      }
+    }
+
     function onWheel(e) {
       e.preventDefault();
       radius = Math.max(6, Math.min(30, radius + e.deltaY * 0.01));
       updateCamera();
     }
+
     function onClick(e) {
+      // If the pointer moved more than a minor threshold, it's a drag/swipe, not a click
+      const dragDist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (dragDist > 6) return;
+
       const rect = renderer.domElement.getBoundingClientRect();
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -379,6 +437,7 @@ export default function BuildingModel3D() {
     dom.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     dom.addEventListener("wheel", onWheel, { passive: false });
     dom.addEventListener("click", onClick);
 
@@ -420,6 +479,7 @@ export default function BuildingModel3D() {
       dom.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       dom.removeEventListener("wheel", onWheel);
       dom.removeEventListener("click", onClick);
       clearTimeout(idleTimer);
@@ -522,11 +582,11 @@ export default function BuildingModel3D() {
   const floorTabs = [{ key: "all", label: "All Floors" }, ...FLOOR_DEFS.map(f => ({ key: f.key, label: f.label }))];
 
   return (
-    <div style={{ width: "100%", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#f3ece4" }}>
-      <div style={{ background: "#8c3a4a", color: "#fff", padding: "14px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+    <div className="main-container">
+      <div className="header-container">
         <div>
           <div style={{ fontWeight: 700, fontSize: "1.15rem" }}>St. Peter's Block — 3D Model & Route Finder</div>
-          <div style={{ fontSize: "0.78rem", opacity: 0.85 }}>Drag to rotate · scroll to zoom · click a room for details</div>
+          <div style={{ fontSize: "0.78rem", opacity: 0.85 }}>Drag to rotate · pinch/scroll to zoom · tap room for details</div>
         </div>
         <button
           onClick={() => threeRef.current.resetView && threeRef.current.resetView()}
@@ -536,15 +596,15 @@ export default function BuildingModel3D() {
         </button>
       </div>
 
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <div style={{ width: 300, background: "#fff", borderRight: "1px solid #e4d9d0", padding: 20, overflowY: "auto" }}>
+      <div className="content-row">
+        <div className="sidebar-panel">
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#6e2c3a", fontWeight: 700, marginBottom: 6 }}>From</label>
             <select value={fromId} onChange={e => setFromId(e.target.value)} style={{ width: "100%", padding: "9px 10px", border: "1.5px solid #e4d9d0", borderRadius: 6, fontSize: "0.9rem" }}>
               {optionsFor()}
             </select>
           </div>
-          <button onClick={handleSwap} style={{ background: "none", border: "1.5px solid #e4d9d0", borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: "0.78rem", color: "#6e2c3a", marginBottom: 14 }}>⇅ Swap</button>
+          <button onClick={handleSwap} style={{ background: "none", border: "1.5px solid #e4d9d0", borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: "0.78rem", color: "#6e2c3a", marginBottom: 14, alignSelf: "flex-start" }}>⇅ Swap</button>
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#6e2c3a", fontWeight: 700, marginBottom: 6 }}>To</label>
             <select value={toId} onChange={e => setToId(e.target.value)} style={{ width: "100%", padding: "9px 10px", border: "1.5px solid #e4d9d0", borderRadius: 6, fontSize: "0.9rem" }}>
@@ -570,12 +630,12 @@ export default function BuildingModel3D() {
           )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", gap: 8, padding: "10px 22px", background: "#fff", borderBottom: "1px solid #e4d9d0", flexWrap: "wrap" }}>
+        <div className="map-view-container">
+          <div className="floor-tabs-container">
             {floorTabs.map(t => (
               <div key={t.key} onClick={() => setVisibleFloor(t.key)}
+                className="floor-tab"
                 style={{
-                  padding: "7px 16px", borderRadius: 20, cursor: "pointer", fontSize: "0.85rem", fontWeight: 600,
                   background: visibleFloor === t.key ? "#8c3a4a" : "#fff",
                   color: visibleFloor === t.key ? "#fff" : "#2b2320",
                   border: "1.5px solid " + (visibleFloor === t.key ? "#8c3a4a" : "#e4d9d0"),
@@ -584,8 +644,8 @@ export default function BuildingModel3D() {
               </div>
             ))}
           </div>
-          <div style={{ position: "relative", flex: 1 }}>
-            <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
+          <div className="canvas-wrapper">
+            <div ref={mountRef} className="canvas-element" />
             {selected && (
               <div style={{ position: "absolute", bottom: 18, left: 18, background: "#fff", borderRadius: 8, padding: "14px 18px", boxShadow: "0 6px 20px rgba(0,0,0,0.15)", maxWidth: 260, border: "1px solid #e4d9d0" }}>
                 <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#8c3a4a", fontWeight: 700 }}>Room {selected.id}</div>

@@ -1,0 +1,113 @@
+/* General layout styles */
+.main-container {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #f3ece4;
+  overflow: hidden;
+}
+
+.header-container {
+  background: #8c3a4a;
+  color: #fff;
+  padding: 14px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.content-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar-panel {
+  width: 300px;
+  background: #fff;
+  border-right: 1px solid #e4d9d0;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.map-view-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.floor-tabs-container {
+  display: flex;
+  gap: 8px;
+  padding: 10px 22px;
+  background: #fff;
+  border-bottom: 1px solid #e4d9d0;
+  flex-wrap: wrap;
+}
+
+.floor-tab {
+  padding: 7px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.canvas-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.canvas-element {
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* Crucial: stops mobile drag from scrolling the page */
+}
+
+/* Responsive adjustments for mobile devices */
+@media (max-width: 768px) {
+  .content-row {
+    flex-direction: column-reverse; /* Put map container at the top, controls at the bottom */
+  }
+
+  .sidebar-panel {
+    width: 100%;
+    height: auto;
+    flex: 1; /* Occupy remaining space below map */
+    border-right: none;
+    border-top: 1px solid #e4d9d0;
+    padding: 16px;
+  }
+
+  .map-view-container {
+    height: 48vh; /* Set map to take a solid block of the height at the top */
+    flex: none;
+  }
+
+  .floor-tabs-container {
+    padding: 8px 16px;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-wrap: nowrap; /* Horizontal scrolling for tabs on mobile */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  
+  .floor-tabs-container::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  .floor-tab {
+    flex-shrink: 0;
+  }
+}
