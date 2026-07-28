@@ -142,15 +142,41 @@ function dijkstra(start, end) {
   return path;
 }
 
+function getNearestStairKey(nodeId) {
+  const node = NODES[nodeId];
+  if (!node) return "A";
+  const distToA = Math.hypot(node.x - 320, node.y - 295);
+  const distToB = Math.hypot(node.x - 320, node.y - 545);
+  return distToA < distToB ? "A" : "B";
+}
+
+function getNearestStair(nodeId) {
+  const key = getNearestStairKey(nodeId);
+  return key === "A" ? "Staircase 1" : "Staircase 2";
+}
+
+function getStairDirection(nodeId, stairKey) {
+  const node = NODES[nodeId];
+  if (!node) return "";
+  const stair = STAIRS.find(s => s.key === stairKey);
+  if (!stair) return "";
+  return node.x < stair.x ? "Right" : "Left";
+}
+
 function buildSteps(path) {
   const steps = [];
   const first = NODES[path[0]];
   const firstName = first.type === "room" ? `Room ${path[0]} — ${first.desc}` : first.label;
-  steps.push(`Start at <b>${firstName}</b> (${floorLabel(first.floor)}).`);
+  const stairKey = getNearestStairKey(path[0]);
+  const nearestStair = stairKey === "A" ? "Staircase 1" : "Staircase 2";
+  const direction = getStairDirection(path[0], stairKey);
+  steps.push(`Start at <b>${firstName}</b> (${floorLabel(first.floor)}). <span style="font-size:0.8rem;color:#666;">(${nearestStair} is on your ${direction.toLowerCase()})</span>`);
   for (let i = 1; i < path.length; i++) {
     const prev = NODES[path[i - 1]], cur = NODES[path[i]];
     if (cur.type === "stair" && prev.type !== "stair") {
-      steps.push(`Walk to <b>${cur.label}</b> (${floorLabel(cur.floor)}).`);
+      const startNode = NODES[path[0]];
+      const dirText = startNode.x < 320 ? "on your right" : "on your left";
+      steps.push(`Walk to <b>${cur.label}</b> (${floorLabel(cur.floor)}) ${dirText}.`);
     } else if (cur.type === "stair" && prev.type === "stair" && cur.floor === prev.floor) {
       steps.push(`Cross the corridor to <b>${cur.label}</b>.`);
     } else if (cur.type === "stair" && prev.type === "stair" && cur.floor !== prev.floor) {
@@ -233,6 +259,7 @@ export default function BuildingModel3D() {
     scene.add(ground);
 
     const roomMeshMap = {};
+    const entranceMeshMap = {};
     const stairMeshMap = {};
     const floorGroups = {};
 
@@ -269,7 +296,6 @@ export default function BuildingModel3D() {
         mesh.position.set(cx, base + 0.06 + roomH / 2, cz);
         mesh.castShadow = true; mesh.receiveShadow = true;
         group.add(mesh);
-        roomMeshMap[r.id] = { mesh, floorKey: floor.key, desc: r.desc, baseColor: r.color };
 
         const edges = new THREE.EdgesGeometry(geo);
         const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: "#ffffff" }));
@@ -279,6 +305,8 @@ export default function BuildingModel3D() {
         const label = makeTextSprite(r.id);
         label.position.set(cx, base + roomH + 0.35, cz);
         group.add(label);
+
+        roomMeshMap[r.id] = { mesh, line, label, floorKey: floor.key, desc: r.desc, baseColor: r.color };
       });
 
       floor.entrances.forEach(e => {
@@ -293,6 +321,8 @@ export default function BuildingModel3D() {
         label.scale.set(1.6, 0.8, 1);
         label.position.set(cx, base + 0.9, cz);
         group.add(label);
+
+        entranceMeshMap[e.id] = { cone, label, floorKey: floor.key, baseColor: "#6e2c3a" };
       });
     });
 
@@ -316,7 +346,7 @@ export default function BuildingModel3D() {
       const towerLabel = makeTextSprite(s.label, "#4a4a4a");
       towerLabel.position.set(sx, towerHeight + 0.4, sz);
       scene.add(towerLabel);
-      stairMeshMap[s.key] = { tower, towerLine, sx, sz };
+      stairMeshMap[s.key] = { tower, towerLine, label: towerLabel, sx, sz };
     });
 
     const pathGroup = new THREE.Group();
@@ -447,7 +477,15 @@ export default function BuildingModel3D() {
       frameId = requestAnimationFrame(animate);
       if (autoRotate) { theta += 0.0016; updateCamera(); }
       const vf = visibleFloorRef.current;
-      FLOOR_DEFS.forEach(f => { floorGroups[f.key].visible = vf === "all" || vf === f.key; });
+      FLOOR_DEFS.forEach(f => {
+        if (vf === "all") {
+          floorGroups[f.key].visible = true;
+        } else if (Array.isArray(vf)) {
+          floorGroups[f.key].visible = vf.includes(f.key);
+        } else {
+          floorGroups[f.key].visible = vf === f.key;
+        }
+      });
       if (threeRef.current.pathCurve) {
         markerT = (markerT + 0.0025) % 1;
         pathMarker.position.copy(threeRef.current.pathCurve.getPointAt(markerT));
@@ -469,7 +507,7 @@ export default function BuildingModel3D() {
     ro.observe(mount);
 
     threeRef.current = {
-      scene, roomMeshMap, stairMeshMap, pathGroup, pathCurve: null,
+      scene, roomMeshMap, entranceMeshMap, stairMeshMap, pathGroup, pathCurve: null,
       resetView: () => { radius = 16; theta = Math.PI / 4; phi = Math.PI / 3.2; updateCamera(); },
     };
 
@@ -496,16 +534,50 @@ export default function BuildingModel3D() {
   }, []);
 
   function clearHighlights() {
-    const { roomMeshMap, stairMeshMap } = threeRef.current;
+    const { roomMeshMap, entranceMeshMap, stairMeshMap } = threeRef.current;
     if (!roomMeshMap) return;
     Object.values(roomMeshMap).forEach(v => {
+      v.mesh.visible = true;
+      if (v.line) v.line.visible = true;
+      if (v.label) v.label.visible = true;
       v.mesh.material.emissive.set(0x000000);
       v.mesh.material.emissiveIntensity = 0;
     });
-    Object.values(stairMeshMap).forEach(v => {
-      v.tower.material.color.set("#8a8a8a");
-      v.tower.material.opacity = 0.3;
-    });
+    if (entranceMeshMap) {
+      Object.values(entranceMeshMap).forEach(v => {
+        v.cone.visible = true;
+        if (v.label) v.label.visible = true;
+        v.cone.material.color.set(v.baseColor);
+        if (v.cone.material.emissive) {
+          v.cone.material.emissive.set(0x000000);
+          v.cone.material.emissiveIntensity = 0;
+        }
+      });
+    }
+    if (stairMeshMap) {
+      Object.values(stairMeshMap).forEach(v => {
+        v.tower.visible = true;
+        if (v.towerLine) v.towerLine.visible = true;
+        if (v.label) v.label.visible = true;
+        v.tower.material.color.set("#8a8a8a");
+        v.tower.material.opacity = 0.3;
+      });
+    }
+  }
+
+  function handleClearRoute() {
+    const { pathGroup } = threeRef.current;
+    if (pathGroup) {
+      while (pathGroup.children.length) {
+        const child = pathGroup.children.pop();
+        child.geometry && child.geometry.dispose();
+        child.material && child.material.dispose();
+        pathGroup.remove(child);
+      }
+    }
+    clearHighlights();
+    threeRef.current.pathCurve = null;
+    setSteps(null);
   }
 
   function handleFindRoute() {
@@ -513,7 +585,7 @@ export default function BuildingModel3D() {
     const path = dijkstra(fromId, toId);
     if (!path) { alert("No route could be found between these two points."); return; }
 
-    const { roomMeshMap, stairMeshMap, pathGroup } = threeRef.current;
+    const { roomMeshMap, entranceMeshMap, stairMeshMap, pathGroup } = threeRef.current;
 
     while (pathGroup.children.length) {
       const child = pathGroup.children.pop();
@@ -523,18 +595,74 @@ export default function BuildingModel3D() {
     }
     clearHighlights();
 
-    [path[0], path[path.length - 1]].forEach(id => {
-      if (roomMeshMap[id]) {
-        roomMeshMap[id].mesh.material.emissive.set("#8c3a4a");
-        roomMeshMap[id].mesh.material.emissiveIntensity = 0.55;
-      }
-    });
+    const pathSet = new Set(path);
+    const pathStairKeys = new Set();
     path.forEach(id => {
       const node = NODES[id];
-      if (node.type === "stair") {
-        const key = id.split("_")[0];
-        stairMeshMap[key].tower.material.color.set("#1f8a5f");
-        stairMeshMap[key].tower.material.opacity = 0.55;
+      if (node && node.type === "stair") {
+        pathStairKeys.add(id.split("_")[0]);
+      }
+    });
+
+    // Hide all non-path rooms
+    Object.entries(roomMeshMap).forEach(([id, v]) => {
+      const onPath = pathSet.has(id);
+      v.mesh.visible = onPath;
+      if (v.line) v.line.visible = onPath;
+      if (v.label) v.label.visible = onPath;
+    });
+
+    // Hide all non-path entrances
+    if (entranceMeshMap) {
+      Object.entries(entranceMeshMap).forEach(([id, v]) => {
+        const onPath = pathSet.has(id);
+        v.cone.visible = onPath;
+        if (v.label) v.label.visible = onPath;
+      });
+    }
+
+    // Hide all non-path stairs
+    if (stairMeshMap) {
+      Object.entries(stairMeshMap).forEach(([key, v]) => {
+        const onPath = pathStairKeys.has(key);
+        v.tower.visible = onPath;
+        if (v.towerLine) v.towerLine.visible = onPath;
+        if (v.label) v.label.visible = onPath;
+      });
+    }
+
+    const startId = path[0];
+    const endId = path[path.length - 1];
+
+    // Style start node different: Blue (#2563eb)
+    if (roomMeshMap[startId]) {
+      roomMeshMap[startId].mesh.material.emissive.set("#2563eb");
+      roomMeshMap[startId].mesh.material.emissiveIntensity = 0.8;
+    } else if (entranceMeshMap && entranceMeshMap[startId]) {
+      entranceMeshMap[startId].cone.material.color.set("#2563eb");
+      entranceMeshMap[startId].cone.material.emissive.set("#2563eb");
+      entranceMeshMap[startId].cone.material.emissiveIntensity = 0.8;
+    }
+
+    // Style end node different: Red (#dc2626)
+    if (roomMeshMap[endId]) {
+      roomMeshMap[endId].mesh.material.emissive.set("#dc2626");
+      roomMeshMap[endId].mesh.material.emissiveIntensity = 0.8;
+    } else if (entranceMeshMap && entranceMeshMap[endId]) {
+      entranceMeshMap[endId].cone.material.color.set("#dc2626");
+      entranceMeshMap[endId].cone.material.emissive.set("#dc2626");
+      entranceMeshMap[endId].cone.material.emissiveIntensity = 0.8;
+    }
+
+    // Highlight intermediate stair towers if any
+    path.forEach(id => {
+      if (id !== startId && id !== endId) {
+        const node = NODES[id];
+        if (node.type === "stair") {
+          const key = id.split("_")[0];
+          stairMeshMap[key].tower.material.color.set("#10b981");
+          stairMeshMap[key].tower.material.opacity = 0.55;
+        }
       }
     });
 
@@ -544,24 +672,53 @@ export default function BuildingModel3D() {
       const base = FLOOR_BASE[fi];
       return new THREE.Vector3(toWorldX(node.x), base + 0.22, toWorldZ(node.y));
     });
+    
     const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.05);
     const tubeGeo = new THREE.TubeGeometry(curve, Math.max(64, points.length * 20), 0.07, 10, false);
-    const tubeMat = new THREE.MeshStandardMaterial({ color: "#1f8a5f", emissive: "#1f8a5f", emissiveIntensity: 0.5, roughness: 0.3 });
+    const tubeMat = new THREE.MeshStandardMaterial({ color: "#10b981", emissive: "#10b981", emissiveIntensity: 0.5, roughness: 0.3 });
     const tube = new THREE.Mesh(tubeGeo, tubeMat);
     pathGroup.add(tube);
 
-    const startMat = new THREE.MeshStandardMaterial({ color: "#8c3a4a", emissive: "#8c3a4a", emissiveIntensity: 0.6 });
-    const endMat = new THREE.MeshStandardMaterial({ color: "#c99a2e", emissive: "#c99a2e", emissiveIntensity: 0.6 });
-    const startSphere = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), startMat);
+    // End Spheres: Start is Blue, End is Red
+    const startMat = new THREE.MeshStandardMaterial({ color: "#2563eb", emissive: "#2563eb", emissiveIntensity: 0.6 });
+    const endMat = new THREE.MeshStandardMaterial({ color: "#dc2626", emissive: "#dc2626", emissiveIntensity: 0.6 });
+    
+    const startSphere = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), startMat);
     startSphere.position.copy(points[0]);
-    const endSphere = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), endMat);
+    
+    const endSphere = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), endMat);
     endSphere.position.copy(points[points.length - 1]);
+    
     pathGroup.add(startSphere, endSphere);
+
+    // Intermediate spheres
+    for (let i = 1; i < points.length - 1; i++) {
+      const interMat = new THREE.MeshStandardMaterial({ color: "#10b981", emissive: "#10b981", emissiveIntensity: 0.6 });
+      const interSphere = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), interMat);
+      interSphere.position.copy(points[i]);
+      pathGroup.add(interSphere);
+    }
 
     threeRef.current.pathCurve = curve;
 
     setSteps(buildSteps(path));
-    setVisibleFloor("all");
+
+    // Determine which floors are spanned by the path
+    const floorIndices = path.map(id => floorIndex(NODES[id].floor));
+    const minFloorIdx = Math.min(...floorIndices);
+    const maxFloorIdx = Math.max(...floorIndices);
+    const activeFloors = [];
+    for (let i = minFloorIdx; i <= maxFloorIdx; i++) {
+      activeFloors.push(FLOOR_ORDER[i]);
+    }
+
+    if (activeFloors.length === FLOOR_ORDER.length) {
+      setVisibleFloor("all");
+    } else if (activeFloors.length === 1) {
+      setVisibleFloor(activeFloors[0]);
+    } else {
+      setVisibleFloor(activeFloors);
+    }
   }
 
   function handleSwap() {
@@ -603,6 +760,17 @@ export default function BuildingModel3D() {
             <select value={fromId} onChange={e => setFromId(e.target.value)} style={{ width: "100%", padding: "9px 10px", border: "1.5px solid #e4d9d0", borderRadius: 6, fontSize: "0.9rem" }}>
               {optionsFor()}
             </select>
+            <div style={{ fontSize: "0.78rem", color: "#6e2c3a", marginTop: 5, display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ opacity: 0.8 }}>Nearest stair:</span>
+              <strong style={{ fontWeight: 600 }}>
+                {(() => {
+                  const key = getNearestStairKey(fromId);
+                  const name = key === "A" ? "Staircase 1" : "Staircase 2";
+                  const dir = getStairDirection(fromId, key);
+                  return `${name} (on your ${dir.toLowerCase()})`;
+                })()}
+              </strong>
+            </div>
           </div>
           <button onClick={handleSwap} style={{ background: "none", border: "1.5px solid #e4d9d0", borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: "0.78rem", color: "#6e2c3a", marginBottom: 14, alignSelf: "flex-start" }}>⇅ Swap</button>
           <div style={{ marginBottom: 14 }}>
@@ -614,6 +782,11 @@ export default function BuildingModel3D() {
           <button onClick={handleFindRoute} style={{ width: "100%", padding: 12, background: "#8c3a4a", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer" }}>
             Find Shortest Route
           </button>
+          {steps && (
+            <button onClick={handleClearRoute} style={{ width: "100%", padding: 10, background: "#fff", color: "#8c3a4a", border: "1.5px solid #8c3a4a", borderRadius: 6, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", marginTop: 10 }}>
+              Clear Route
+            </button>
+          )}
 
           {steps && (
             <div style={{ marginTop: 20, borderTop: "1px solid #e4d9d0", paddingTop: 14 }}>
@@ -632,17 +805,20 @@ export default function BuildingModel3D() {
 
         <div className="map-view-container">
           <div className="floor-tabs-container">
-            {floorTabs.map(t => (
-              <div key={t.key} onClick={() => setVisibleFloor(t.key)}
-                className="floor-tab"
-                style={{
-                  background: visibleFloor === t.key ? "#8c3a4a" : "#fff",
-                  color: visibleFloor === t.key ? "#fff" : "#2b2320",
-                  border: "1.5px solid " + (visibleFloor === t.key ? "#8c3a4a" : "#e4d9d0"),
-                }}>
-                {t.label}
-              </div>
-            ))}
+            {floorTabs.map(t => {
+              const isTabActive = visibleFloor === t.key || (Array.isArray(visibleFloor) && visibleFloor.includes(t.key));
+              return (
+                <div key={t.key} onClick={() => setVisibleFloor(t.key)}
+                  className="floor-tab"
+                  style={{
+                    background: isTabActive ? "#8c3a4a" : "#fff",
+                    color: isTabActive ? "#fff" : "#2b2320",
+                    border: "1.5px solid " + (isTabActive ? "#8c3a4a" : "#e4d9d0"),
+                  }}>
+                  {t.label}
+                </div>
+              );
+            })}
           </div>
           <div className="canvas-wrapper">
             <div ref={mountRef} className="canvas-element" />
