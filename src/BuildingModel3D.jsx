@@ -985,14 +985,6 @@ export default function BuildingModel3D() {
 
           {steps && (
             <div style={{ marginTop: 20, borderTop: isWarm ? "1.5px solid #8c3a4a" : "1px solid rgba(56, 189, 248, 0.2)", paddingTop: 14 }}>
-              {routeStats && (
-                <div style={{ background: isWarm ? "#ffffff" : "rgba(30, 41, 59, 0.85)", border: isWarm ? "1.5px solid #8c3a4a" : "1px solid rgba(56, 189, 248, 0.3)", borderRadius: 10, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: isWarm ? "#8c3a4a" : "#34d399" }}>
-                    🚶 Estimated Walk: ~{routeStats.timeStr}
-                  </div>
-                </div>
-              )}
-
               <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: isWarm ? "#000000" : "#38bdf8", fontWeight: 800, marginBottom: 10 }}>Directions</div>
               <ol style={{ margin: 0, paddingLeft: 18, color: isWarm ? "#000000" : "#e2e8f0", fontWeight: isWarm ? 600 : 400 }}>
                 {steps.map((s, i) => <li key={i} style={{ fontSize: "0.88rem", marginBottom: 10, lineHeight: 1.45, color: isWarm ? "#000000" : "inherit" }} dangerouslySetInnerHTML={{ __html: s }} />)}
