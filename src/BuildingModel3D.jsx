@@ -1442,21 +1442,24 @@ export default function BuildingModel3D() {
         {/* Sidebar Panel Drawer */}
         <div className={`sidebar-panel ${!drawerOpen ? "collapsed" : ""}`}>
           <div className="drawer-header">
-            <div className="drawer-nav-tabs">
-              <button className={`drawer-tab-btn ${activeTab === "route" ? "active" : ""}`} onClick={() => setActiveTab("route")}>
-                🗺️ Route Planner
-              </button>
-              <button className={`drawer-tab-btn ${activeTab === "search" ? "active" : ""}`} onClick={() => setActiveTab("search")}>
-                🔍 Location Directory
+            <div className="mobile-pull-handle" onClick={() => setDrawerOpen(false)} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              <div className="drawer-nav-tabs">
+                <button className={`drawer-tab-btn ${activeTab === "route" ? "active" : ""}`} onClick={() => setActiveTab("route")}>
+                  🗺️ Route Planner
+                </button>
+                <button className={`drawer-tab-btn ${activeTab === "search" ? "active" : ""}`} onClick={() => setActiveTab("search")}>
+                  🔍 Location Directory
+                </button>
+              </div>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.2rem", padding: "4px 8px" }}
+                title="Close Drawer"
+              >
+                ✕
               </button>
             </div>
-            <button
-              onClick={() => setDrawerOpen(false)}
-              style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.2rem", padding: "4px 8px" }}
-              title="Close Drawer"
-            >
-              ✕
-            </button>
           </div>
 
           <div className="drawer-body">
