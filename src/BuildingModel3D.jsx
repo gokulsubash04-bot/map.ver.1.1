@@ -27,6 +27,394 @@ import {
 } from "./nodesData";
 
 
+/* ==========================================================================
+   DEPARTMENT BLOCK II — BLENDER 3D ARCHITECTURAL MODEL BUILDER
+   Direct conversion of the user's Blender Python script:
+   - W = 40, DEPTH = 8, HEIGHT = 12
+   - Front and back identical facades & entrances
+   - Terracotta panels, Cream columns & floor bands
+   - Red canopies, Blue signs, Dark steps, Cylindrical columns with base & cap
+   - Central tower & pitched triangular gable roof
+   - Side walls with 3 tiers of windows
+   ========================================================================== */
+function buildBlenderBuildingShell() {
+  const shellGroup = new THREE.Group();
+
+  // Materials directly matching Blender script diffuse_color & roughness
+  const WALL = new THREE.MeshStandardMaterial({ color: "#e0c7a8", roughness: 0.55, metalness: 0.05 });
+  const CREAM = new THREE.MeshStandardMaterial({ color: "#eddcc6", roughness: 0.45, metalness: 0.1 });
+  const TERRA = new THREE.MeshStandardMaterial({ color: "#ad381a", roughness: 0.50, metalness: 0.05 });
+  const GLASS = new THREE.MeshStandardMaterial({ color: "#0f1f26", roughness: 0.20, metalness: 0.85, transparent: true, opacity: 0.65 });
+  const WOOD = new THREE.MeshStandardMaterial({ color: "#331206", roughness: 0.60, metalness: 0.1 });
+  const ROOF = new THREE.MeshStandardMaterial({ color: "#61210e", roughness: 0.50, metalness: 0.1, side: THREE.DoubleSide });
+  const CANOPY = new THREE.MeshStandardMaterial({ color: "#85260f", roughness: 0.40, metalness: 0.1 });
+  const SIGN = new THREE.MeshStandardMaterial({ color: "#05298c", roughness: 0.30, metalness: 0.3 });
+  const DARK = new THREE.MeshStandardMaterial({ color: "#040505", roughness: 0.90 });
+  const STEP = new THREE.MeshStandardMaterial({ color: "#141417", roughness: 0.80 });
+  const GROUND = new THREE.MeshStandardMaterial({ color: "#335724", roughness: 0.95 });
+  const PAVING = new THREE.MeshStandardMaterial({ color: "#857359", roughness: 0.60 });
+
+  // 1:1 Mapping constants between Blender space (W=40, DEPTH=8, HEIGHT=12) and Three.js World
+  const SX = 12.4 / 20.0;
+  const SZ = 17.0 / 4.0;
+  const SY = 8.4 / 12.0;
+
+  const mX = (x) => x * SX;
+  const mZ = (y) => y * SZ; // Blender Y is Three.js Z (depth)
+  const mY = (z) => z * SY; // Blender Z is Three.js Y (height)
+
+  const cube = (name, loc, size, material) => {
+    // Blender size (dx, dy, dz) -> Three size (dx*SX, dz*SY, dy*SZ)
+    const wX = Math.abs(size[0] * SX);
+    const wY = Math.abs(size[2] * SY);
+    const wZ = Math.abs(size[1] * SZ);
+
+    const geo = new THREE.BoxGeometry(wX, wY, wZ);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(mX(loc[0]), mY(loc[2]), mZ(loc[1]));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.name = name;
+    shellGroup.add(mesh);
+    return mesh;
+  };
+
+  const cylinder = (name, loc, radius, depth, material) => {
+    const wRadius = radius * ((SX + SZ) / 2);
+    const wHeight = depth * SY;
+    const geo = new THREE.CylinderGeometry(wRadius, wRadius, wHeight, 32);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(mX(loc[0]), mY(loc[2]), mZ(loc[1]));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.name = name;
+    shellGroup.add(mesh);
+    return mesh;
+  };
+
+  const gable = (name, x1, x2, y1, y2, zbase, ztop, material) => {
+    const cx = (x1 + x2) / 2;
+    const vertices = new Float32Array([
+      mX(x1), mY(zbase), mZ(y1),
+      mX(x2), mY(zbase), mZ(y1),
+      mX(cx), mY(ztop), mZ(y1),
+
+      mX(x1), mY(zbase), mZ(y2),
+      mX(x2), mY(zbase), mZ(y2),
+      mX(cx), mY(ztop), mZ(y2),
+    ]);
+
+    const indices = [
+      0, 2, 1,
+      3, 4, 5,
+      0, 1, 4, 0, 4, 3,
+      1, 4, 5, 1, 5, 2,
+      0, 3, 5, 0, 5, 2
+    ];
+
+    let geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geo.setIndex(indices);
+    geo = geo.toNonIndexed();
+    geo.computeVertexNormals();
+
+    const mat = material.clone();
+    mat.side = THREE.DoubleSide;
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.name = name;
+    shellGroup.add(mesh);
+    return mesh;
+  };
+
+  const windowObj = (cx, cy, cz, width = 1.45, height = 1.55, rotY = 0) => {
+    const winGroup = new THREE.Group();
+
+    // Glass pane facing local -Z
+    const glassMesh = new THREE.Mesh(new THREE.BoxGeometry(width * SX, height * SY, 0.12 * SZ), GLASS);
+    glassMesh.castShadow = true;
+    winGroup.add(glassMesh);
+
+    const t = 0.10;
+    // Wood Outer Frames
+    const leftF = new THREE.Mesh(new THREE.BoxGeometry(t * SX, height * SY, 0.18 * SZ), WOOD);
+    leftF.position.set((-width / 2 + t / 2) * SX, 0, -0.04 * SZ);
+    winGroup.add(leftF);
+
+    const rightF = new THREE.Mesh(new THREE.BoxGeometry(t * SX, height * SY, 0.18 * SZ), WOOD);
+    rightF.position.set((width / 2 - t / 2) * SX, 0, -0.04 * SZ);
+    winGroup.add(rightF);
+
+    const topF = new THREE.Mesh(new THREE.BoxGeometry(width * SX, t * SY, 0.18 * SZ), WOOD);
+    topF.position.set(0, (height / 2 - t / 2) * SY, -0.04 * SZ);
+    winGroup.add(topF);
+
+    const botF = new THREE.Mesh(new THREE.BoxGeometry(width * SX, t * SY, 0.18 * SZ), WOOD);
+    botF.position.set(0, (-height / 2 + t / 2) * SY, -0.04 * SZ);
+    winGroup.add(botF);
+
+    // Center Vertical Mullion
+    const midF = new THREE.Mesh(new THREE.BoxGeometry(0.08 * SX, height * SY, 0.20 * SZ), WOOD);
+    midF.position.set(0, 0, -0.05 * SZ);
+    winGroup.add(midF);
+
+    // Protruding Cream Sill
+    const sillMesh = new THREE.Mesh(new THREE.BoxGeometry((width + 0.20) * SX, 0.12 * SY, 0.30 * SZ), CREAM);
+    sillMesh.position.set(0, (-height / 2 - 0.08) * SY, -0.08 * SZ);
+    winGroup.add(sillMesh);
+
+    winGroup.position.set(mX(cx), mY(cz), mZ(cy));
+    winGroup.rotation.y = rotY;
+    shellGroup.add(winGroup);
+  };
+
+  // 1. MAIN BUILDING BODY
+  cube("Main Building", [0, 0, 6.0], [40, 8, 12.0], WALL);
+
+  // TOP PARAPET ROOF CORNICE MOLDING (Main Building Top Roof Cap)
+  cube("Top Parapet Trim Front", [0, -4.05, 12.1], [40.8, 0.40, 0.30], CREAM);
+  cube("Top Parapet Trim Back", [0, 4.05, 12.1], [40.8, 0.40, 0.30], CREAM);
+  cube("Top Parapet Trim Left", [-20.15, 0, 12.1], [0.30, 8.4, 0.30], CREAM);
+  cube("Top Parapet Trim Right", [20.15, 0, 12.1], [0.30, 8.4, 0.30], CREAM);
+
+  // 2. TERRACOTTA FRONT & BACK FACADE PANELS
+  const facade_panels = (y, front = true) => {
+    for (const [x1, x2] of [
+      [-19.4, -16.5], [-16.0, -12.7], [-12.2, -8.8],
+      [8.8, 12.2], [12.7, 16.0], [16.5, 19.4]
+    ]) {
+      for (const [z1, z2] of [
+        [0.4, 3.9], [4.15, 7.55], [7.85, 11.15]
+      ]) {
+        cube("Terracotta Panel", [(x1 + x2) / 2, y, (z1 + z2) / 2], [x2 - x1, 0.12, z2 - z1], TERRA);
+      }
+    }
+
+    for (const z of [3.85, 7.55, 11.15]) {
+      cube("Horizontal Band", [0, y, z + 0.19], [40.6, 0.35, 0.38], CREAM);
+    }
+
+    for (const x of [-20, -16.5, -12.5, -8.0, -4, 4, 8.0, 12.5, 16.5, 20]) {
+      cube("Vertical Column", [x, y, 5.9], [0.36, 0.45, 11.3], CREAM);
+    }
+  };
+
+  facade_panels(-4.05, true);
+  facade_panels(4.05, false);
+
+  // 3. CENTRAL TOWER & FLANKING SIDE TURRETS (Front and Back)
+  for (const y of [-4.25, 4.25]) {
+    // Central Main Spire Tower
+    cube("Central Tower", [0, y, 9.2], [6.4, 0.55, 18.0], CREAM);
+    for (const x of [-3.0, 3.0]) {
+      cube("Tower Frame", [x, y, 9.2], [0.35, 0.65, 18.0], CREAM);
+    }
+
+    // Left Flanking Side Turret Base
+    cube("Left Turret Base", [-5.0, y, 13.5], [3.0, 0.55, 3.0], CREAM);
+
+    // Right Flanking Side Turret Base
+    cube("Right Turret Base", [5.0, y, 13.5], [3.0, 0.55, 3.0], CREAM);
+
+    // Circular Clock / Emblem Window on Central Spire
+    const clockY = mZ(y < 0 ? y - 0.28 : y + 0.28);
+    const clockZ = mY(16.2);
+
+    const clockRingGeo = new THREE.CylinderGeometry(mX(0.95), mX(0.95), 0.18, 32);
+    clockRingGeo.rotateX(Math.PI / 2);
+    const clockRing = new THREE.Mesh(clockRingGeo, CREAM);
+    clockRing.position.set(0, clockZ, clockY);
+    shellGroup.add(clockRing);
+
+    const clockFaceGeo = new THREE.CylinderGeometry(mX(0.75), mX(0.75), 0.22, 32);
+    clockFaceGeo.rotateX(Math.PI / 2);
+    const clockFace = new THREE.Mesh(clockFaceGeo, GLASS);
+    clockFace.position.set(0, clockZ, clockY);
+    shellGroup.add(clockFace);
+  }
+
+  // 4. WINDOWS (Front and Back Facades with additional Window columns)
+  for (const y of [-4.30, 4.30]) {
+    const rotY = y < 0 ? 0 : Math.PI;
+    for (const z of [2.1, 5.55, 8.9]) {
+      for (const x of [-17.8, -14.2, -11.2, -8.0, -5.2, 5.2, 8.0, 11.2, 14.2, 17.8]) {
+        windowObj(x, y, z, 1.45, 1.55, rotY);
+      }
+    }
+    for (const [z, w] of [
+      [2.1, 1.6], [5.5, 1.6], [8.9, 1.6], [12.0, 1.45], [14.6, 1.25]
+    ]) {
+      windowObj(0, y, z, w, 1.55, rotY);
+    }
+  }
+
+  // 5. CENTRAL ARCH & ENTRANCE TOWER
+  for (const y of [-4.45, 4.45]) {
+    cube("Central Entrance Tower", [0, y, 9.0], [4.8, 0.55, 13.0], CREAM);
+    cube("Central Arch Glass", [0, y < 0 ? y - 0.32 : y + 0.32, 10.4], [2.0, 0.12, 3.0], GLASS);
+  }
+
+  // BACK ENTRANCE (Completely Open Portal with Zero Doors or Frames)
+  cube("Back Entrance Recess", [0, 4.42, 2.0], [5.8, 0.30, 3.6], DARK);
+  for (const x of [-3.15, 3.15]) {
+    cylinder("Back Entrance Column", [x, 4.65, 2.05], 0.42, 3.55, CREAM);
+    cylinder("Back Column Base", [x, 4.65, 0.34], 0.52, 0.18, CREAM);
+    cylinder("Back Column Cap", [x, 4.65, 3.86], 0.52, 0.20, CREAM);
+  }
+  const stepsDef = [
+    [0.25, 0.55, 4.8],
+    [0.48, 0.45, 4.3],
+    [0.71, 0.35, 3.8]
+  ];
+  stepsDef.forEach(([z, depth, width], i) => {
+    cube("Back Entrance Step", [0, 4.85 + depth * i / 3, z + 0.1], [width, depth, 0.20], STEP);
+  });
+  // Fixed 3D Facade Wall Text Mesh for ST. PETER'S BLOCK (Glued 1:1 to Building Wall)
+  const makeFixedFacadeTextMesh = (text, front = true) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024; canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+
+    // Completely transparent background
+    ctx.clearRect(0, 0, 1024, 128);
+
+    // High visibility drop shadow behind letters
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 3;
+
+    ctx.font = "900 54px 'Outfit', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Crisp white outline stroke for maximum contrast against building wall
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#ffffff";
+    ctx.strokeText(text, 512, 64);
+
+    // High Contrast Bold Black Fill
+    ctx.fillStyle = "#0c0c0e";
+    ctx.fillText(text, 512, 64);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+
+    // MeshBasicMaterial attached to PlaneGeometry fixed flat on the wall surface
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+    const planeW = 8.5 * SX * 2;
+    const planeH = 1.4 * SY * 2;
+    const geo = new THREE.PlaneGeometry(planeW, planeH);
+    const mesh = new THREE.Mesh(geo, mat);
+
+    if (front) {
+      mesh.position.set(mX(0), mY(4.85), mZ(-4.50));
+      mesh.rotation.y = 0; // Fixed flat facing Front (-Z)
+    } else {
+      mesh.position.set(mX(0), mY(4.85), mZ(4.50));
+      mesh.rotation.y = Math.PI; // Fixed flat facing Back (+Z)
+    }
+
+    return mesh;
+  };
+
+  // ENTRANCE BUILDER (Front and Back are 100% Identical Architecture)
+  const buildEntrance = (front = true) => {
+    const ySign = front ? -1 : 1;
+    const prefix = front ? "Front" : "Back";
+
+    // Dark Recessed Entryway Portal
+    cube(prefix + " Entrance Recess", [0, ySign * 4.42, 2.0], [5.8, 0.30, 3.6], DARK);
+
+    // Twin Structural Columns with Base & Cap
+    for (const x of [-3.15, 3.15]) {
+      cylinder(prefix + " Entrance Column", [x, ySign * 4.65, 2.05], 0.42, 3.55, CREAM);
+      cylinder(prefix + " Column Base",     [x, ySign * 4.65, 0.34], 0.52, 0.18, CREAM);
+      cylinder(prefix + " Column Cap",      [x, ySign * 4.65, 3.86], 0.52, 0.20, CREAM);
+    }
+
+    // 3-Tier Stepped Stairs
+    const stepsDef = [
+      [0.25, 0.55, 4.8],
+      [0.48, 0.45, 4.3],
+      [0.71, 0.35, 3.8]
+    ];
+    stepsDef.forEach(([z, depth, width], i) => {
+      cube(prefix + " Entrance Step", [0, ySign * (4.85 + depth * i / 3), z + 0.1], [width, depth, 0.20], STEP);
+    });
+
+    // Red Canopy & Front Lip Border
+    cube(prefix + " Entrance Canopy", [0, ySign * 5.0, 4.18], [10.2, 1.7, 0.35], CANOPY);
+    cube(prefix + " Canopy Front Lip", [0, ySign * 5.88, 3.92], [10.5, 0.22, 0.27], CANOPY);
+
+    // Fixed 3D Signage Header ("ST. PETER'S BLOCK")
+    const signMesh = makeFixedFacadeTextMesh("ST. PETER'S BLOCK", front);
+    shellGroup.add(signMesh);
+  };
+
+  buildEntrance(true);  // Front Entrance
+  buildEntrance(false); // Back Entrance (100% Identical)
+
+  // ROOFS & TURRET GABLE CAPS (Brown Pitched Roof Caps at Front & Back Facades ONLY, NOT connected across middle depth)
+  // Front Elevation Brown Roof Caps
+  gable("Front Central Roof Peak", -3.45, 3.45, -4.50, -3.80, 18.0, 21.2, ROOF);
+  gable("Front Left Turret Roof", -6.5, -3.5, -4.50, -3.80, 15.0, 17.5, ROOF);
+  gable("Front Right Turret Roof", 3.5, 6.5, -4.50, -3.80, 15.0, 17.5, ROOF);
+
+  // Back Elevation Brown Roof Caps
+  gable("Back Central Roof Peak", -3.45, 3.45, 3.80, 4.50, 18.0, 21.2, ROOF);
+  gable("Back Left Turret Roof", -6.5, -3.5, 3.80, 4.50, 15.0, 17.5, ROOF);
+  gable("Back Right Turret Roof", 3.5, 6.5, 3.80, 4.50, 15.0, 17.5, ROOF);
+
+  // Ground Stepped Base Platform
+  cube("Building Ground Base Platform", [0, 0, -0.20], [44.0, 8.8, 0.40], CREAM);
+
+  // FULL SIDE FACADES (Left & Right Side Walls matching Front & Back Architecture)
+  for (const x of [-20.15, 20.15]) {
+    const isLeft = x < 0;
+    const dir = isLeft ? -1 : 1;
+    const rotY = isLeft ? -Math.PI / 2 : Math.PI / 2;
+    const offPanel = dir * 0.08;
+    const offCol = dir * 0.12;
+    const offBand = dir * 0.10;
+
+    cube("Side Main Wall", [x, 0, 6.0], [0.30, 8.2, 12.0], WALL);
+
+    for (const [y1, y2] of [
+      [-3.6, -1.9], [-1.7, 0.0], [0.2, 1.9], [2.1, 3.8]
+    ]) {
+      for (const [z1, z2] of [
+        [0.4, 3.9], [4.15, 7.55], [7.85, 11.15]
+      ]) {
+        cube("Side Terracotta Panel", [x + offPanel, (y1 + y2) / 2, (z1 + z2) / 2], [0.12, y2 - y1, z2 - z1], TERRA);
+      }
+    }
+
+    for (const z of [3.85, 7.55, 11.15]) {
+      cube("Side Horizontal Band", [x + offBand, 0, z + 0.19], [0.35, 8.2, 0.38], CREAM);
+    }
+
+    for (const y of [-3.85, -1.8, 0.1, 2.0, 3.85]) {
+      cube("Side Vertical Column", [x + offCol, y, 5.9], [0.45, 0.36, 11.3], CREAM);
+    }
+
+    // Restore side facade windows matching front elevation
+    for (const z of [2.1, 5.55, 8.9]) {
+      for (const y of [-2.75, -0.85, 1.05, 2.95]) {
+        windowObj(x, y, z, 1.45, 1.55, rotY);
+      }
+    }
+  }
+
+  // GROUND & PAVING
+  cube("Ground Lawn", [0, 0, -0.20], [46, 16, 0.40], GROUND);
+  cube("Front Paving", [0, -6.0, 0.05], [43, 3.0, 0.10], PAVING);
+
+  return shellGroup;
+}
+
 /* ================= 3D Sprite Label Helper ================= */
 function makeTextSprite(text, color = "#ffffff") {
   const canvas = document.createElement("canvas");
@@ -281,6 +669,7 @@ export default function BuildingModel3D() {
   const [themeMode, setThemeMode] = useState("warm");
   const [cameraPreset, setCameraPreset] = useState("iso");
   const [showNodes, setShowNodes] = useState(true); // Default show node visualizer
+  const [showShell, setShowShell] = useState(true); // Default show exterior Blender building shell
 
   const visibleFloorRef = useRef(visibleFloor);
   visibleFloorRef.current = visibleFloor;
@@ -330,6 +719,10 @@ export default function BuildingModel3D() {
     const fill = new THREE.DirectionalLight(themeMode === "warm" ? "#fecdd3" : "#34d399", 0.35);
     fill.position.set(-14, 12, -12);
     scene.add(fill);
+
+    // 3D Exterior Architectural Building Shell from Blender Model Script
+    const shellGroup = buildBlenderBuildingShell();
+    scene.add(shellGroup);
 
     // Clean Ground Pad & Natural Lawn Ring
     const lawn = new THREE.Mesh(
@@ -537,53 +930,13 @@ export default function BuildingModel3D() {
         const w = r.w * SCALE, d = r.h * SCALE;
         const cx = toWorldX(r.x + r.w / 2), cz = toWorldZ(r.y + r.h / 2);
         const geo = new THREE.BoxGeometry(w, roomH, d);
-        
+
         const roomColor = roomColorMap[r.id] || "#a83232";
         const mat = new THREE.MeshStandardMaterial({ color: roomColor, roughness: 0.5, metalness: 0.1 });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(cx, base + 0.07 + roomH / 2, cz);
         mesh.castShadow = true; mesh.receiveShadow = true;
         group.add(mesh);
-
-        // Realistic Glass Windows ONLY on Exterior Outside Walls of the Building
-        const windowFrameMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.4, metalness: 0.8 });
-        const windowGlassMat = new THREE.MeshStandardMaterial({
-          color: "#38bdf8", roughness: 0.1, metalness: 0.9, transparent: true, opacity: 0.65
-        });
-
-        const addWindowOnFace = (wallSide) => {
-          if (wallSide === 'left' || wallSide === 'right') {
-            const wallX = wallSide === 'left' ? cx - w / 2 - 0.02 : cx + w / 2 + 0.02;
-            const offsets = d >= 1.2 ? [-d * 0.22, d * 0.22] : [0];
-            const winWidth = d >= 1.2 ? d * 0.3 : d * 0.45;
-
-            offsets.forEach(offsetZ => {
-              const winFrame = new THREE.Mesh(new THREE.BoxGeometry(0.04, roomH * 0.42, winWidth), windowFrameMat);
-              winFrame.position.set(wallX, mesh.position.y, cz + offsetZ);
-              const winGlass = new THREE.Mesh(new THREE.BoxGeometry(0.05, roomH * 0.35, winWidth * 0.85), windowGlassMat);
-              winGlass.position.copy(winFrame.position);
-              group.add(winFrame, winGlass);
-            });
-          } else if (wallSide === 'top' || wallSide === 'bottom') {
-            const wallZ = wallSide === 'top' ? cz - d / 2 - 0.02 : cz + d / 2 + 0.02;
-            const offsets = w >= 1.2 ? [-w * 0.22, w * 0.22] : [0];
-            const winWidth = w >= 1.2 ? w * 0.3 : w * 0.45;
-
-            offsets.forEach(offsetX => {
-              const winFrame = new THREE.Mesh(new THREE.BoxGeometry(winWidth, roomH * 0.42, 0.04), windowFrameMat);
-              winFrame.position.set(cx + offsetX, mesh.position.y, wallZ);
-              const winGlass = new THREE.Mesh(new THREE.BoxGeometry(winWidth * 0.85, roomH * 0.35, 0.05), windowGlassMat);
-              winGlass.position.copy(winFrame.position);
-              group.add(winFrame, winGlass);
-            });
-          }
-        };
-
-        // Only place windows on building exterior perimeter walls!
-        if (Math.abs(r.x - minX) < 15) addWindowOnFace('left');
-        if (Math.abs((r.x + r.w) - maxX) < 15) addWindowOnFace('right');
-        if (Math.abs(r.y - minY) < 15) addWindowOnFace('top');
-        if (Math.abs((r.y + r.h) - maxY) < 15) addWindowOnFace('bottom');
 
         // Realistic Room Door ONLY on the Inside Corridor-Facing Wall
         const doorFrameMat = new THREE.MeshStandardMaterial({ color: "#334155", roughness: 0.6, metalness: 0.2 });
@@ -671,7 +1024,7 @@ export default function BuildingModel3D() {
         hvac.position.set(slabCx, base + FLOOR_H + 0.42, slabCz + slabD * 0.2);
         group.add(hvac);
 
-        const logoSprite = makeTextSprite("ST. PETER'S BLOCK 3", themeMode === "warm" ? "#8c3a4a" : "#38bdf8");
+        const logoSprite = makeTextSprite("", themeMode === "warm" ? "#8c3a4a" : "#38bdf8");
         logoSprite.scale.set(3.2, 1.6, 1);
         logoSprite.position.set(slabCx, base + FLOOR_H + 1.25, slabCz + slabD / 2 + 0.2);
         group.add(logoSprite);
@@ -927,9 +1280,9 @@ export default function BuildingModel3D() {
     beaconRing.rotation.x = -Math.PI / 2;
     beaconGroup.add(beaconRing);
 
-    // Orbit Camera State
-    const target = new THREE.Vector3(0, FLOOR_BASE[1], 0);
-    let radius = 26, theta = Math.PI / 4, phi = Math.PI / 3.2;
+    // Orbit Camera State (Starts facing front facade elevation & zoomed out for wide framing)
+    const target = new THREE.Vector3(0, FLOOR_BASE[1] + 1.2, 0);
+    let radius = 42, theta = 0, phi = Math.PI / 2.3;
     let dragging = false, lastX = 0, lastY = 0, autoRotate = true, idleTimer = null;
     let startX = 0, startY = 0;
 
@@ -946,11 +1299,11 @@ export default function BuildingModel3D() {
 
     function setPreset(type) {
       if (type === "top") {
-        radius = 28; theta = 0; phi = 0.05;
+        radius = 42; theta = 0; phi = 0.05;
       } else if (type === "front") {
-        radius = 26; theta = 0; phi = Math.PI / 2.2;
+        radius = 40; theta = 0; phi = Math.PI / 2.3;
       } else {
-        radius = 26; theta = Math.PI / 4; phi = Math.PI / 3.2;
+        radius = 42; theta = Math.PI / 4; phi = Math.PI / 3.2;
       }
       updateCamera();
     }
@@ -1060,6 +1413,9 @@ export default function BuildingModel3D() {
           floorGroups[f.key].visible = vf === f.key;
         }
       });
+      if (threeRef.current.shellGroup) {
+        threeRef.current.shellGroup.visible = (vf === "all") && threeRef.current.showShellState;
+      }
       if (threeRef.current.nodesGroup) {
         threeRef.current.nodesGroup.visible = threeRef.current.showNodesState;
       }
@@ -1096,7 +1452,7 @@ export default function BuildingModel3D() {
     ro.observe(mount);
 
     threeRef.current = {
-      scene, roomMeshMap, entranceMeshMap, stairMeshMap, pathGroup, nodesGroup, showNodesState: showNodes, pathCurve: null,
+      scene, shellGroup, roomMeshMap, entranceMeshMap, stairMeshMap, pathGroup, nodesGroup, showNodesState: showNodes, showShellState: showShell, pathCurve: null,
       resetView: () => { radius = 26; theta = Math.PI / 4; phi = Math.PI / 3.2; updateCamera(); },
       zoomIn: () => { radius = Math.max(6, radius - 3); updateCamera(); },
       zoomOut: () => { radius = Math.min(45, radius + 3); updateCamera(); },
@@ -1132,6 +1488,12 @@ export default function BuildingModel3D() {
       threeRef.current.showNodesState = showNodes;
     }
   }, [showNodes]);
+
+  useEffect(() => {
+    if (threeRef.current) {
+      threeRef.current.showShellState = showShell;
+    }
+  }, [showShell]);
 
   useEffect(() => {
     if (threeRef.current) {
@@ -1333,27 +1695,28 @@ export default function BuildingModel3D() {
         <div className="brand-section">
           <div className="brand-logo-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-              <polyline points="9 22 9 12 15 12 15 22"/>
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </div>
           <div>
-            <div className="brand-title">St. Peter's Block 3D</div>
+            <div className="brand-title">Campus Architecture & Interactive Navigation Studio</div>
             <div className="brand-subtitle">
               <span className="live-indicator-dot" />
-              <span>Campus Building 3D Architecture Model</span>
+              <span>St. Peter's Block</span>
             </div>
           </div>
         </div>
 
         <div className="header-controls">
-          {/* Node Visualizer Overlay Toggle Button */}
+          {/* Exterior Facade Building Shell Toggle */}
           <button
-            className={`hud-btn ${showNodes ? "active" : ""}`}
-            onClick={() => setShowNodes(!showNodes)}
-            title="Toggle Visual Navigation Nodes Grid"
+            className={`hud-btn ${showShell ? "active" : ""}`}
+            onClick={() => setShowShell(!showShell)}
+            title="Toggle Building Facade Shell"
+            aria-label="Toggle Building Facade Shell"
           >
-            📍 {showNodes ? "Hide Graph Nodes" : "Show Graph Nodes"}
+            🏛️ {showShell ? "Building Facade: ON" : "Building Facade: OFF"}
           </button>
 
           {/* Theme Selector Pill Group */}
@@ -1361,16 +1724,18 @@ export default function BuildingModel3D() {
             <button
               className={`hud-btn ${themeMode === "warm" ? "active" : ""}`}
               onClick={() => setThemeMode("warm")}
-              title="Campus Terracotta Theme"
+              title="Terracotta Campus Theme"
+              aria-label="Terracotta Campus Theme"
             >
-              🏛️ Campus Terracotta
+              🏛️ Terracotta Campus
             </button>
             <button
               className={`hud-btn ${themeMode === "dark" ? "active" : ""}`}
               onClick={() => setThemeMode("dark")}
-              title="Midnight Cyber Theme"
+              title="Obsidian Midnight Theme"
+              aria-label="Obsidian Midnight Theme"
             >
-              🌌 Midnight Cyber
+              🌌 Obsidian Midnight
             </button>
           </div>
         </div>
@@ -1378,7 +1743,7 @@ export default function BuildingModel3D() {
 
       {/* Floating Toggle Drawer Button when Drawer is Collapsed */}
       {!drawerOpen && (
-        <button className="toggle-drawer-btn" onClick={() => setDrawerOpen(true)} title="Open Navigation Panel">
+        <button className="toggle-drawer-btn" onClick={() => setDrawerOpen(true)} title="Open Navigation Panel" aria-label="Open Navigation Panel">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <line x1="3" y1="12" x2="21" y2="12"></line>
             <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -1388,7 +1753,7 @@ export default function BuildingModel3D() {
       )}
 
       {/* Floating Floor Selector Bar (Center Top) */}
-      <div className="floor-selector-bar">
+      <div className="floor-selector-bar" role="navigation" aria-label="Floor Selection">
         {floorTabs.map(t => {
           const isTabActive = visibleFloor === t.key || (Array.isArray(visibleFloor) && visibleFloor.includes(t.key));
           return (
@@ -1396,6 +1761,7 @@ export default function BuildingModel3D() {
               key={t.key}
               onClick={() => setVisibleFloor(t.key)}
               className={`floor-pill-btn ${isTabActive ? "active" : ""}`}
+              aria-label={t.label}
             >
               {t.label}
             </button>
@@ -1404,36 +1770,39 @@ export default function BuildingModel3D() {
       </div>
 
       {/* Camera View Toolbar (Right Side) */}
-      <div className="camera-toolbar">
+      <div className="camera-toolbar" role="toolbar" aria-label="3D View Controls">
         <button
           className={`camera-btn ${cameraPreset === "iso" ? "active" : ""}`}
           onClick={() => { setCameraPreset("iso"); threeRef.current.setPreset && threeRef.current.setPreset("iso"); }}
-          title="Isometric View"
+          title="3D Isometric Perspective"
+          aria-label="3D Isometric Perspective"
         >
           📐
         </button>
         <button
           className={`camera-btn ${cameraPreset === "top" ? "active" : ""}`}
           onClick={() => { setCameraPreset("top"); threeRef.current.setPreset && threeRef.current.setPreset("top"); }}
-          title="Top Down 2D Floorplan"
+          title="2D Top-Down Floorplan"
+          aria-label="2D Top-Down Floorplan"
         >
           🔝
         </button>
         <button
           className={`camera-btn ${cameraPreset === "front" ? "active" : ""}`}
           onClick={() => { setCameraPreset("front"); threeRef.current.setPreset && threeRef.current.setPreset("front"); }}
-          title="Front View"
+          title="Front Building Elevation"
+          aria-label="Front Building Elevation"
         >
           🏢
         </button>
         <div style={{ height: 1, background: "var(--btn-border)", margin: "2px 0" }} />
-        <button className="camera-btn" onClick={() => threeRef.current.zoomIn && threeRef.current.zoomIn()} title="Zoom In">
+        <button className="camera-btn" onClick={() => threeRef.current.zoomIn && threeRef.current.zoomIn()} title="Zoom In" aria-label="Zoom In">
           ➕
         </button>
-        <button className="camera-btn" onClick={() => threeRef.current.zoomOut && threeRef.current.zoomOut()} title="Zoom Out">
+        <button className="camera-btn" onClick={() => threeRef.current.zoomOut && threeRef.current.zoomOut()} title="Zoom Out" aria-label="Zoom Out">
           ➖
         </button>
-        <button className="camera-btn" onClick={() => threeRef.current.resetView && threeRef.current.resetView()} title="Reset Camera">
+        <button className="camera-btn" onClick={() => threeRef.current.resetView && threeRef.current.resetView()} title="Reset Camera View" aria-label="Reset Camera View">
           🔄
         </button>
       </div>
@@ -1444,18 +1813,19 @@ export default function BuildingModel3D() {
           <div className="drawer-header">
             <div className="mobile-pull-handle" onClick={() => setDrawerOpen(false)} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-              <div className="drawer-nav-tabs">
-                <button className={`drawer-tab-btn ${activeTab === "route" ? "active" : ""}`} onClick={() => setActiveTab("route")}>
+              <div className="drawer-nav-tabs" role="tablist">
+                <button className={`drawer-tab-btn ${activeTab === "route" ? "active" : ""}`} onClick={() => setActiveTab("route")} role="tab" aria-selected={activeTab === "route"}>
                   🗺️ Route Planner
                 </button>
-                <button className={`drawer-tab-btn ${activeTab === "search" ? "active" : ""}`} onClick={() => setActiveTab("search")}>
-                  🔍 Location Directory
+                <button className={`drawer-tab-btn ${activeTab === "search" ? "active" : ""}`} onClick={() => setActiveTab("search")} role="tab" aria-selected={activeTab === "search"}>
+                  🔍 Room Directory
                 </button>
               </div>
               <button
                 onClick={() => setDrawerOpen(false)}
                 style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.2rem", padding: "4px 8px" }}
-                title="Close Drawer"
+                title="Close Navigation Drawer"
+                aria-label="Close Navigation Drawer"
               >
                 ✕
               </button>
@@ -1474,6 +1844,7 @@ export default function BuildingModel3D() {
                         key={c.key}
                         onClick={() => setSearchCategory(c.key)}
                         className={`chip-btn ${searchCategory === c.key ? "active" : ""}`}
+                        aria-label={c.label}
                       >
                         {c.label}
                       </button>
@@ -1491,7 +1862,7 @@ export default function BuildingModel3D() {
                     value={fromId}
                     onChange={setFromId}
                     searchCategory={searchCategory}
-                    placeholder="Type or pick start location..."
+                    placeholder="Type or select start room..."
                   />
                   <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: 6 }}>
                     Nearest Staircase: <strong>{getNearestStairKey(fromId) === "A" ? "Staircase 1" : "Staircase 2"}</strong> ({getStairDirection(fromId, getNearestStairKey(fromId))})
@@ -1500,7 +1871,7 @@ export default function BuildingModel3D() {
 
                 {/* Swap Button */}
                 <div className="swap-btn-wrapper">
-                  <button className="swap-circle-btn" onClick={handleSwap} title="Swap Locations">
+                  <button className="swap-circle-btn" onClick={handleSwap} title="Swap Start & Destination" aria-label="Swap Start and Destination">
                     ⇅
                   </button>
                 </div>
@@ -1515,16 +1886,16 @@ export default function BuildingModel3D() {
                     value={toId}
                     onChange={setToId}
                     searchCategory={searchCategory}
-                    placeholder="Type or pick destination..."
+                    placeholder="Type or select destination room..."
                   />
                 </div>
 
-                <button className="action-btn-primary" onClick={handleFindRoute}>
+                <button className="action-btn-primary" onClick={handleFindRoute} aria-label="Find Shortest Route">
                   <span>🚀</span> Find Shortest Route
                 </button>
 
                 {steps && (
-                  <button className="action-btn-secondary" onClick={handleClearRoute}>
+                  <button className="action-btn-secondary" onClick={handleClearRoute} aria-label="Clear Route">
                     Clear Route
                   </button>
                 )}
@@ -1565,17 +1936,6 @@ export default function BuildingModel3D() {
                   </div>
                 )}
 
-                {/* Node Legend Box */}
-                <div style={{ padding: 14, background: "rgba(0,0,0,0.18)", borderRadius: 16, fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.65 }}>
-                  <div style={{ fontWeight: 800, color: "var(--text-main)", marginBottom: 6 }}>📍 Node Visualizer Legend:</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                    <div>🔵 <strong style={{ color: "#3b82f6" }}>Blue:</strong> Room Node</div>
-                    <div>🩵 <strong style={{ color: "#06b6d4" }}>Cyan:</strong> Door Exit</div>
-                    <div>🟢 <strong style={{ color: "#10b981" }}>Green:</strong> Corridor Waypoint</div>
-                    <div>🟣 <strong style={{ color: "#a855f7" }}>Purple:</strong> Staircase Node</div>
-                    <div>🟡 <strong style={{ color: "#f59e0b" }}>Gold:</strong> Main Entrance</div>
-                  </div>
-                </div>
               </>
             )}
 

@@ -42,8 +42,8 @@ export const FLOOR_DEFS = [
     key: "ground",
     label: "Ground Floor",
     entrances: [
-      { id: "ENT-L", x: 14, y: 430, name: "Main Entrance" },
-      { id: "ENT-R", x: 626, y: 430, name: "Side Entrance" },
+      { id: "ENT-L", x: 14, y: 430, name: "" },
+      { id: "ENT-R", x: 626, y: 430, name: "" },
     ],
     rooms: [
       { id: "101", x: 30, y: 30, w: 220, h: 320, desc: "Lecture Hall" },
