@@ -202,37 +202,19 @@ function buildBlenderBuildingShell() {
   };
 
   facade_panels(-4.05, true);
-  facade_panels(4.05, false);
-
-  // 3. CENTRAL TOWER & FLANKING SIDE TURRETS (Front and Back)
+  facade_panels(4.05, false);  // 3. CENTRAL TOWER & FLANKING SIDE TURRETS (Front and Back)
+  // 3. CENTRAL TOWER & SINGLE CENTRAL ROOF PEAK (Front and Back)
   for (const y of [-4.25, 4.25]) {
-    // Central Main Spire Tower
+    // Central Main Spire Tower (Yellow/Cream Protruding Bay matching Photo)
     cube("Central Tower", [0, y, 9.2], [6.4, 0.55, 18.0], CREAM);
     for (const x of [-3.0, 3.0]) {
       cube("Tower Frame", [x, y, 9.2], [0.35, 0.65, 18.0], CREAM);
     }
 
-    // Left Flanking Side Turret Base
-    cube("Left Turret Base", [-5.0, y, 13.5], [3.0, 0.55, 3.0], CREAM);
-
-    // Right Flanking Side Turret Base
-    cube("Right Turret Base", [5.0, y, 13.5], [3.0, 0.55, 3.0], CREAM);
-
-    // Circular Clock / Emblem Window on Central Spire
-    const clockY = mZ(y < 0 ? y - 0.28 : y + 0.28);
-    const clockZ = mY(16.2);
-
-    const clockRingGeo = new THREE.CylinderGeometry(mX(0.95), mX(0.95), 0.18, 32);
-    clockRingGeo.rotateX(Math.PI / 2);
-    const clockRing = new THREE.Mesh(clockRingGeo, CREAM);
-    clockRing.position.set(0, clockZ, clockY);
-    shellGroup.add(clockRing);
-
-    const clockFaceGeo = new THREE.CylinderGeometry(mX(0.75), mX(0.75), 0.22, 32);
-    clockFaceGeo.rotateX(Math.PI / 2);
-    const clockFace = new THREE.Mesh(clockFaceGeo, GLASS);
-    clockFace.position.set(0, clockZ, clockY);
-    shellGroup.add(clockFace);
+    // High Arched Glass Window on Top Floor of Central Tower (Matching Photo)
+    const archY = y < 0 ? y - 0.32 : y + 0.32;
+    cube("Central Arch Window Base", [0, archY, 14.2], [2.8, 0.12, 3.2], GLASS);
+    gable("Central Arch Window Top Gable", -1.4, 1.4, archY - 0.06, archY + 0.06, 15.8, 17.5, GLASS);
   }
 
   // 4. WINDOWS (Front and Back Facades with additional Window columns)
@@ -256,84 +238,15 @@ function buildBlenderBuildingShell() {
     cube("Central Arch Glass", [0, y < 0 ? y - 0.32 : y + 0.32, 10.4], [2.0, 0.12, 3.0], GLASS);
   }
 
-  // BACK ENTRANCE (Completely Open Portal with Zero Doors or Frames)
-  cube("Back Entrance Recess", [0, 4.42, 2.0], [5.8, 0.30, 3.6], DARK);
-  for (const x of [-3.15, 3.15]) {
-    cylinder("Back Entrance Column", [x, 4.65, 2.05], 0.42, 3.55, CREAM);
-    cylinder("Back Column Base", [x, 4.65, 0.34], 0.52, 0.18, CREAM);
-    cylinder("Back Column Cap", [x, 4.65, 3.86], 0.52, 0.20, CREAM);
-  }
-  const stepsDef = [
-    [0.25, 0.55, 4.8],
-    [0.48, 0.45, 4.3],
-    [0.71, 0.35, 3.8]
-  ];
-  stepsDef.forEach(([z, depth, width], i) => {
-    cube("Back Entrance Step", [0, 4.85 + depth * i / 3, z + 0.1], [width, depth, 0.20], STEP);
-  });
-  // Fixed 3D Facade Wall Text Mesh for ST. PETER'S BLOCK (Glued 1:1 to Building Wall)
-  const makeFixedFacadeTextMesh = (text, front = true) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1024; canvas.height = 128;
-    const ctx = canvas.getContext("2d");
 
-    // Completely transparent background
-    ctx.clearRect(0, 0, 1024, 128);
 
-    // High visibility drop shadow behind letters
-    ctx.shadowColor = "rgba(0,0,0,0.85)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-
-    ctx.font = "900 54px 'Outfit', sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    // Crisp white outline stroke for maximum contrast against building wall
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "#ffffff";
-    ctx.strokeText(text, 512, 64);
-
-    // High Contrast Bold Black Fill
-    ctx.fillStyle = "#0c0c0e";
-    ctx.fillText(text, 512, 64);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.minFilter = THREE.LinearFilter;
-
-    // MeshBasicMaterial attached to PlaneGeometry fixed flat on the wall surface
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-    const planeW = 8.5 * SX * 2;
-    const planeH = 1.4 * SY * 2;
-    const geo = new THREE.PlaneGeometry(planeW, planeH);
-    const mesh = new THREE.Mesh(geo, mat);
-
-    if (front) {
-      mesh.position.set(mX(0), mY(4.85), mZ(-4.50));
-      mesh.rotation.y = 0; // Fixed flat facing Front (-Z)
-    } else {
-      mesh.position.set(mX(0), mY(4.85), mZ(4.50));
-      mesh.rotation.y = Math.PI; // Fixed flat facing Back (+Z)
-    }
-
-    return mesh;
-  };
-
-  // ENTRANCE BUILDER (Front and Back are 100% Identical Architecture)
+  // ENTRANCE BUILDER (Clean Facade Entrance without protruding front walkway body)
   const buildEntrance = (front = true) => {
     const ySign = front ? -1 : 1;
     const prefix = front ? "Front" : "Back";
 
     // Dark Recessed Entryway Portal
     cube(prefix + " Entrance Recess", [0, ySign * 4.42, 2.0], [5.8, 0.30, 3.6], DARK);
-
-    // Twin Structural Columns with Base & Cap
-    for (const x of [-3.15, 3.15]) {
-      cylinder(prefix + " Entrance Column", [x, ySign * 4.65, 2.05], 0.42, 3.55, CREAM);
-      cylinder(prefix + " Column Base",     [x, ySign * 4.65, 0.34], 0.52, 0.18, CREAM);
-      cylinder(prefix + " Column Cap",      [x, ySign * 4.65, 3.86], 0.52, 0.20, CREAM);
-    }
 
     // 3-Tier Stepped Stairs
     const stepsDef = [
@@ -345,28 +258,16 @@ function buildBlenderBuildingShell() {
       cube(prefix + " Entrance Step", [0, ySign * (4.85 + depth * i / 3), z + 0.1], [width, depth, 0.20], STEP);
     });
 
-    // Red Canopy & Front Lip Border
-    cube(prefix + " Entrance Canopy", [0, ySign * 5.0, 4.18], [10.2, 1.7, 0.35], CANOPY);
-    cube(prefix + " Canopy Front Lip", [0, ySign * 5.88, 3.92], [10.5, 0.22, 0.27], CANOPY);
-
-    // Fixed 3D Signage Header ("ST. PETER'S BLOCK")
-    const signMesh = makeFixedFacadeTextMesh("ST. PETER'S BLOCK", front);
-    shellGroup.add(signMesh);
+    // Main Entrance Header Fascia Beam right above entrance columns
+    cube(prefix + " Entrance Header Fascia", [0, ySign * 4.68, 4.18], [9.8, 0.30, 0.40], CREAM);
   };
 
   buildEntrance(true);  // Front Entrance
   buildEntrance(false); // Back Entrance (100% Identical)
 
-  // ROOFS & TURRET GABLE CAPS (Brown Pitched Roof Caps at Front & Back Facades ONLY, NOT connected across middle depth)
-  // Front Elevation Brown Roof Caps
+  // ROOFS (Single Central Roof Peak over the Center Entrance Tower matching Campus Photo)
   gable("Front Central Roof Peak", -3.45, 3.45, -4.50, -3.80, 18.0, 21.2, ROOF);
-  gable("Front Left Turret Roof", -6.5, -3.5, -4.50, -3.80, 15.0, 17.5, ROOF);
-  gable("Front Right Turret Roof", 3.5, 6.5, -4.50, -3.80, 15.0, 17.5, ROOF);
-
-  // Back Elevation Brown Roof Caps
   gable("Back Central Roof Peak", -3.45, 3.45, 3.80, 4.50, 18.0, 21.2, ROOF);
-  gable("Back Left Turret Roof", -6.5, -3.5, 3.80, 4.50, 15.0, 17.5, ROOF);
-  gable("Back Right Turret Roof", 3.5, 6.5, 3.80, 4.50, 15.0, 17.5, ROOF);
 
   // Ground Stepped Base Platform
   cube("Building Ground Base Platform", [0, 0, -0.20], [44.0, 8.8, 0.40], CREAM);
@@ -668,7 +569,7 @@ export default function BuildingModel3D() {
   const [activeTab, setActiveTab] = useState("route");
   const [themeMode, setThemeMode] = useState("warm");
   const [cameraPreset, setCameraPreset] = useState("iso");
-  const [showNodes, setShowNodes] = useState(true); // Default show node visualizer
+  const [showNodes, setShowNodes] = useState(false); // Default hide node visualizer for visitors
   const [showShell, setShowShell] = useState(true); // Default show exterior Blender building shell
 
   const visibleFloorRef = useRef(visibleFloor);
@@ -1659,10 +1560,7 @@ export default function BuildingModel3D() {
     const { steps: buildStepList, stairFlightsCount } = buildSteps(path);
     setSteps(buildStepList);
 
-    const meters = Math.round(distance * 0.25);
-    const durationSec = Math.max(15, Math.round(meters / 1.1));
-    const timeStr = durationSec < 60 ? `${durationSec}s` : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`;
-    setRouteStats({ meters, timeStr, stairs: stairFlightsCount });
+    setRouteStats({ stairs: stairFlightsCount });
 
     const floorIndices = path.map(id => floorIndex(NODES[id].floor));
     const minIdx = Math.min(...floorIndices), maxIdx = Math.max(...floorIndices);
@@ -1700,10 +1598,10 @@ export default function BuildingModel3D() {
             </svg>
           </div>
           <div>
-            <div className="brand-title">Campus Architecture & Interactive Navigation Studio</div>
+            <div className="brand-title">3D Campus Navigation Studio</div>
             <div className="brand-subtitle">
               <span className="live-indicator-dot" />
-              <span>St. Peter's Block</span>
+              <span>Interactive Building Map</span>
             </div>
           </div>
         </div>
@@ -1901,17 +1799,9 @@ export default function BuildingModel3D() {
                 )}
 
                 {/* Route Summary Stats */}
-                {routeStats && (
+                {routeStats && routeStats.stairs > 0 && (
                   <div className="route-summary-card">
-                    <div className="stat-box">
-                      <div className="stat-val">📏 {routeStats.meters}m</div>
-                      <div className="stat-lbl">Distance</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-val">⚡ {routeStats.timeStr}</div>
-                      <div className="stat-lbl">Est. Walk</div>
-                    </div>
-                    <div className="stat-box">
+                    <div className="stat-box" style={{ width: "100%" }}>
                       <div className="stat-val">🪜 {routeStats.stairs}</div>
                       <div className="stat-lbl">Stair Flights</div>
                     </div>
