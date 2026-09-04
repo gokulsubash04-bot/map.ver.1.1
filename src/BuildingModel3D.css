@@ -1,5 +1,5 @@
 /* ======================================================
-   ST. PETER'S 3D NAVIGATOR — ULTRA LUXURY MODERN UI
+   ST PETER'S BLOCK — ULTRA LUXURY MODERN UI
    ====================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -64,7 +64,7 @@ body, html {
   --input-text: #f8fafc;
   --dropdown-bg: rgba(11, 17, 32, 0.96);
   --dropdown-hover: rgba(56, 189, 248, 0.18);
-  --badge-start: #2563eb;
+  --badge-start: #10b981;
   --badge-end: #f43f5e;
 }
 
@@ -94,7 +94,7 @@ body, html {
   --input-text: #231216;
   --dropdown-bg: #ffffff;
   --dropdown-hover: rgba(140, 58, 74, 0.12);
-  --badge-start: #1d4ed8;
+  --badge-start: #10b981;
   --badge-end: #e11d48;
 }
 
